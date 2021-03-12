@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
 import { WsAdapter } from '@nestjs/platform-ws'
 import { WorkerModule } from './worker/worker.module'
-import { MessageQueueProcessor } from './worker/message-queue/message-queue.processor'
 import { ConfigService } from '@nestjs/config'
 const cluster = require('cluster')
 const os = require('os')
@@ -21,9 +20,6 @@ async function bootstrapMain() {
 
 async function bootstrapWorker() {
     const app = await NestFactory.createApplicationContext(WorkerModule)
-    // const queue = app.get(MessageQueueProcessor).queue
-    //
-    // console.log(await queue.getJobCounts())
 }
 
 async function main() {

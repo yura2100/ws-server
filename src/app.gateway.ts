@@ -9,13 +9,17 @@ import {
 import { Logger } from '@nestjs/common'
 import { SocketChannelsService } from './socket-channels/socket-channels.service'
 import { Socket } from './socket'
+import { InjectQueue } from '@nestjs/bull'
+import { Queue } from 'bull'
 
 @WebSocketGateway()
 export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
     private readonly logger = new Logger(AppGateway.name)
 
-    constructor(private readonly socketChannelsService: SocketChannelsService) {
-    }
+    constructor(
+        private readonly socketChannelsService: SocketChannelsService,
+        @InjectQueue('messages') private readonly messagesQueue: Queue
+    ) {}
 
     afterInit(server: any) {
         this.logger.log('Init')
@@ -31,11 +35,15 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
     }
     
     @SubscribeMessage('add')
-    handleChannelAdd(
+    async handleChannelAdd(
         @MessageBody() channel: string,
         @ConnectedSocket() client: Socket
     ) {
         const status = this.socketChannelsService.addChannel(channel, client)
+
+        if (status) {
+            await this.messagesQueue.add('create', { channel })
+        }
 
         client.send(JSON.stringify({
             channel,
@@ -45,11 +53,15 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
     }
 
     @SubscribeMessage('delete')
-    handleChannelDelete(
+    async handleChannelDelete(
         @MessageBody() channel: string,
         @ConnectedSocket() client: Socket
     ) {
         const status = this.socketChannelsService.deleteChannel(channel, client)
+
+        if (status) {
+            await this.messagesQueue.add('delete', { channel })
+        }
 
         client.send(JSON.stringify({
             channel,
@@ -88,7 +100,7 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
     }
 
     @SubscribeMessage('message')
-    handleMessage(
+    async handleMessage(
         @MessageBody() { channel, message },
         @ConnectedSocket() client: Socket) {
         const sockets = this.socketChannelsService.getClients(channel)
@@ -96,10 +108,12 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
         if (sockets.includes(client)) {
             const response = JSON.stringify({
                 channel,
+                message,
                 status: true,
-                event: 'message',
-                message: message
+                event: 'message'
             })
+
+            await this.messagesQueue.add('addMessage', {channel, message})
 
             sockets.forEach(socket => {
                 socket.send(response)

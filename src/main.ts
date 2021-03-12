@@ -1,13 +1,45 @@
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
 import { WsAdapter } from '@nestjs/platform-ws'
+import { WorkerModule } from './worker/worker.module'
+import { MessageQueueProcessor } from './worker/message-queue/message-queue.processor'
+import { ConfigService } from '@nestjs/config'
+const cluster = require('cluster')
+const os = require('os')
 
-async function bootstrap() {
+async function bootstrapMain() {
     const app = await NestFactory.create(AppModule)
 
     app.useWebSocketAdapter(new WsAdapter(app))
 
-    await app.listen(3000)
+    const configService = app.get(ConfigService)
+
+    const port = configService.get('port')
+
+    await app.listen(port)
 }
 
-bootstrap()
+async function bootstrapWorker() {
+    const app = await NestFactory.createApplicationContext(WorkerModule)
+    // const queue = app.get(MessageQueueProcessor).queue
+    //
+    // console.log(await queue.getJobCounts())
+}
+
+async function main() {
+    if (cluster.isMaster) {
+        const cpusCount = os.cpus().length
+
+        for (let i = 0; i < cpusCount - 1; i++) {
+            const worker = cluster.fork()
+
+            worker.on('exit', cluster.fork)
+        }
+
+        bootstrapMain()
+    } else if (cluster.isWorker) {
+        bootstrapWorker()
+    }
+}
+
+main()

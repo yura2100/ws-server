@@ -17,9 +17,10 @@ export class ChannelsService {
         await this.channelModel.findOneAndDelete({name})
     }
 
-    async addMessage(channelName: string, message: string) {
+    async addMessage(userId: string, channelName: string, message: string) {
         const channel = await this.channelModel.findOne({name: channelName})
         channel.messages.push({
+            userId,
             message,
             date: Date.now()
         })

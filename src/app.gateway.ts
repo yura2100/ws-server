@@ -6,26 +6,30 @@ import {
     OnGatewayInit, SubscribeMessage,
     WebSocketGateway
 } from '@nestjs/websockets'
-import { Logger } from '@nestjs/common'
+import { HttpService, Logger } from '@nestjs/common'
 import { SocketChannelsService } from './socket-channels/socket-channels.service'
 import { Socket } from './socket'
 import { InjectQueue } from '@nestjs/bull'
 import { Queue } from 'bull'
+import { v4 as uuid } from 'uuid'
 
 @WebSocketGateway()
 export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
     private readonly logger = new Logger(AppGateway.name)
 
     constructor(
+        private readonly httpService: HttpService,
         private readonly socketChannelsService: SocketChannelsService,
         @InjectQueue('messages') private readonly messagesQueue: Queue
-    ) {}
+    ) {
+    }
 
     afterInit(server: any) {
         this.logger.log('Init')
     }
 
     handleConnection(client: Socket) {
+        client.id = uuid()
         client.channels = []
         client.createdChannels = []
     }
@@ -33,7 +37,7 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
     handleDisconnect(client: Socket) {
         this.socketChannelsService.deleteClient(client)
     }
-    
+
     @SubscribeMessage('add')
     async handleChannelAdd(
         @MessageBody() channel: string,
@@ -102,7 +106,8 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
     @SubscribeMessage('message')
     async handleMessage(
         @MessageBody() { channel, message },
-        @ConnectedSocket() client: Socket) {
+        @ConnectedSocket() client: Socket
+    ) {
         const sockets = this.socketChannelsService.getClients(channel)
 
         if (sockets.includes(client)) {
@@ -113,7 +118,7 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
                 event: 'message'
             })
 
-            await this.messagesQueue.add('addMessage', {channel, message})
+            await this.messagesQueue.add('addMessage', { userId: client.id, channel, message })
 
             sockets.forEach(socket => {
                 socket.send(response)
@@ -126,5 +131,58 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
             status: false,
             event: 'message'
         }))
+    }
+
+    @SubscribeMessage('get')
+    async handleGetProducts(
+        @ConnectedSocket() client: Socket
+    ) {
+        const products = await this.httpService.get('/products').toPromise()
+
+        client.send(JSON.stringify({
+            products: products.data,
+            event: 'get'
+        }))
+    }
+
+    @SubscribeMessage('getOne')
+    async handleGetOneProduct(
+        @MessageBody() productId: string,
+        @ConnectedSocket() client: Socket
+    ) {
+        const product = await this.httpService.get(`/products/${productId}`).toPromise()
+
+        client.send(JSON.stringify({
+            product: product.data,
+            event: 'getOne'
+        }))
+    }
+
+    @SubscribeMessage('postOrder')
+    async handlePostOrder(
+        @MessageBody() { productId, quantity },
+        @ConnectedSocket() client: Socket
+    ) {
+        try {
+        await this.httpService.post('/orders', {
+            userId: client.id,
+                productsList: [
+                {
+                    productId: productId,
+                    quantity: quantity
+                }
+            ]
+        }).toPromise()
+
+        client.send(JSON.stringify({
+            status: true,
+            event: 'postOrder'
+        }))
+        } catch (e) {
+            client.send(JSON.stringify({
+                status: false,
+                event: 'postOrder'
+            }))
+        }
     }
 }

@@ -4,7 +4,7 @@ import { ChannelsModule } from './channels/channels.module'
 import { BullModule } from '@nestjs/bull'
 import { MessageQueueModule } from './message-queue/message-queue.module'
 import { ConfigModule, ConfigService } from '@nestjs/config'
-import config from './config'
+import config from '../config'
 
 @Module({
     imports: [

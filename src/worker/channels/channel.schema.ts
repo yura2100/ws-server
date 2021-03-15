@@ -13,6 +13,7 @@ export class Channel {
 
     @Prop({
         type: [{
+            userId: {type: String, required: true},
             message: {type: String, required: true},
             date: {type: Number, required: true}
         }]

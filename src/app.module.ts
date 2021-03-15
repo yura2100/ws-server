@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common'
+import { HttpModule, Module } from '@nestjs/common'
 import { AppGateway } from './app.gateway'
 import { SocketChannelsModule } from './socket-channels/socket-channels.module'
 import { SocketChannelsService } from './socket-channels/socket-channels.service'
 import { BullModule } from '@nestjs/bull'
-import { ConfigModule } from '@nestjs/config'
+import { ConfigModule, ConfigService } from '@nestjs/config'
 import config from './config'
 
 @Module({
@@ -11,14 +11,25 @@ import config from './config'
         ConfigModule.forRoot({
             load: [config]
         }),
-        BullModule.forRoot({
-            redis: {
-                host: 'localhost',
-                port: 6379
-            }
+        BullModule.forRootAsync({
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService) => ({
+                redis: {
+                    host: configService.get('redisHost'),
+                    port: configService.get('redisPort')
+                }
+            })
         }),
         BullModule.registerQueue({
             name: 'messages'
+        }),
+        HttpModule.registerAsync({
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService) => ({
+                baseURL: configService.get('productsURL')
+            })
         }),
         SocketChannelsModule
     ],

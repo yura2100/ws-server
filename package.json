@@ -29,11 +29,13 @@
     "@nestjs/platform-express": "^7.6.13",
     "@nestjs/platform-ws": "^7.6.13",
     "@nestjs/websockets": "^7.6.13",
+    "@types/uuid": "^8.3.0",
     "bull": "^3.20.1",
     "mongoose": "^5.12.0",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^6.6.6",
+    "uuid": "^8.3.2",
     "ws": "^7.4.4"
   },
   "devDependencies": {
